@@ -8,6 +8,7 @@ import {
   DropResult,
 } from "@hello-pangea/dnd";
 import { Trash2 } from "lucide-react";
+import { TaskModal } from "./components/TaskModal";
 
 type Status = "대기" | "진행" | "보류" | "완료";
 
@@ -79,7 +80,7 @@ export const MainPage = () => {
     const newPost: Post = {
       id: Date.now().toString(),
       title: taskInput,
-      status: selectedStatus, // 선택한 보드에 추가
+      status: selectedStatus,
     };
 
     const updatedPosts = [...posts, newPost];
@@ -108,18 +109,15 @@ export const MainPage = () => {
 
   return (
     <div className="p-4 h-screen flex flex-col">
-      {/* ✅ 전체 타이틀 */}
       <h1 className="text-black font-bold mb-4 text-lg">TODO BOARD</h1>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        {/* ✅ 헤더 높이 제외한 나머지를 차지하도록 설정 */}
         <div className="flex gap-4" style={{ height: "calc(100vh - 64px)" }}>
           {statuses.map((status) => (
             <div
               key={status}
               className="flex flex-col w-full bg-gray-100 p-4 rounded-lg shadow-md h-full"
             >
-              {/* ✅ 타이틀 + 추가 버튼 */}
               <div className="flex justify-between items-center mb-2">
                 <h2 className="text-lg font-bold">{status}</h2>
                 <button
@@ -135,14 +133,13 @@ export const MainPage = () => {
                 </button>
               </div>
 
-              {/* ✅ Droppable 적용 (높이 조정, 내용이 많아지면 스크롤) */}
               <Droppable droppableId={String(status)}>
                 {(provided, snapshot) => (
                   <ul
                     ref={provided.innerRef}
                     {...provided.droppableProps}
                     className={`flex flex-col gap-2 p-2 transition-all flex-grow overflow-auto 
-                ${snapshot.isDraggingOver ? "bg-gray-50" : ""}`}
+                  ${snapshot.isDraggingOver ? "bg-gray-50" : ""}`}
                   >
                     {posts
                       .filter((post) => post.status === status)
@@ -185,41 +182,16 @@ export const MainPage = () => {
         </div>
       </DragDropContext>
 
-      {/* ✅ 모달 */}
-      {isModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-6 rounded-lg shadow-md w-80">
-            <h2 className="text-lg font-bold mb-2">
-              {editingId ? "할 일 수정" : `${selectedStatus}에 할 일 추가`}
-            </h2>
-            <input
-              type="text"
-              placeholder="할 일을 입력하세요"
-              value={taskInput}
-              onChange={(e) => setTaskInput(e.target.value)}
-              className="w-full border p-2 rounded mb-2"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                className="px-3 py-1 bg-gray-300 rounded"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setEditingId(null);
-                  setTaskInput("");
-                }}
-              >
-                취소
-              </button>
-              <button
-                className="px-3 py-1 bg-blue-500 text-white rounded"
-                onClick={editingId ? updateTask : addTask}
-              >
-                {editingId ? "수정" : "추가"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ✅ 분리된 모달 적용 */}
+      <TaskModal
+        isOpen={isModalOpen}
+        taskInput={taskInput}
+        setTaskInput={setTaskInput}
+        onClose={() => setIsModalOpen(false)}
+        onSave={editingId ? updateTask : addTask}
+        isEditing={!!editingId}
+        selectedStatus={selectedStatus}
+      />
     </div>
   );
 };
