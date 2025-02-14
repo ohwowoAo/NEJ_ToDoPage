@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   DragDropContext,
   Droppable,
   Draggable,
   DropResult,
 } from "@hello-pangea/dnd";
+import { Trash2 } from "lucide-react";
 
-// ✅ 상태 타입 정의
 type Status = "대기" | "진행" | "보류" | "완료";
 
 type Post = {
@@ -17,7 +17,6 @@ type Post = {
   status: Status;
 };
 
-// ✅ 더미 데이터 (초기 상태)
 const initialPosts: Post[] = [
   { id: "1", title: "할 일 1", status: "대기" },
   { id: "2", title: "할 일 2", status: "진행" },
@@ -25,83 +24,202 @@ const initialPosts: Post[] = [
   { id: "4", title: "할 일 4", status: "완료" },
 ];
 
-// ✅ 상태 리스트
 const statuses: Status[] = ["대기", "진행", "보류", "완료"];
 
 export const MainPage = () => {
-  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [taskInput, setTaskInput] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<Status>("대기");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  // ✅ 드래그 종료 시 실행될 함수
+  useEffect(() => {
+    const savedPosts = localStorage.getItem("posts");
+    if (savedPosts) {
+      setPosts(JSON.parse(savedPosts));
+    } else {
+      setPosts(initialPosts);
+    }
+  }, []);
+
+  const savePostsToLocalStorage = (updatedPosts: Post[]) => {
+    localStorage.setItem("posts", JSON.stringify(updatedPosts));
+    setPosts(updatedPosts);
+  };
+
   const onDragEnd = (result: DropResult) => {
     const { destination } = result;
     if (!destination) return;
 
-    setPosts((prevPosts) => {
-      const updatedPosts = [...prevPosts];
+    const updatedPosts = [...posts];
+    const movedPostIndex = updatedPosts.findIndex(
+      (p) => p.id === result.draggableId
+    );
+    if (movedPostIndex === -1) return;
 
-      // 드래그한 아이템 찾기
-      const movedPostIndex = updatedPosts.findIndex(
-        (p) => p.id === result.draggableId
-      );
-      if (movedPostIndex === -1) return prevPosts;
+    const [movedPost] = updatedPosts.splice(movedPostIndex, 1);
+    movedPost.status = destination.droppableId as Status;
 
-      const [movedPost] = updatedPosts.splice(movedPostIndex, 1); // 기존 위치에서 제거
-      movedPost.status = destination.droppableId as Status; // 새로운 상태 업데이트
+    const targetBoardItems = updatedPosts.filter(
+      (p) => p.status === movedPost.status
+    );
+    targetBoardItems.splice(destination.index, 0, movedPost);
 
-      // 새로운 위치 삽입을 위해 해당 보드의 모든 아이템 필터링
-      const targetBoardItems = updatedPosts.filter(
-        (p) => p.status === movedPost.status
-      );
-      targetBoardItems.splice(destination.index, 0, movedPost); // 새 위치에 삽입
+    const reorderedPosts = [
+      ...updatedPosts.filter((p) => p.status !== movedPost.status),
+      ...targetBoardItems,
+    ];
 
-      // 최종적으로 상태별 정렬을 다시 수행
-      const reorderedPosts = [
-        ...updatedPosts.filter((p) => p.status !== movedPost.status), // 다른 보드의 아이템 유지
-        ...targetBoardItems, // 새로운 상태로 변경된 아이템들 삽입
-      ];
+    savePostsToLocalStorage(reorderedPosts);
+  };
 
-      return reorderedPosts;
-    });
+  const addTask = () => {
+    if (!taskInput.trim()) return;
+
+    const newPost: Post = {
+      id: Date.now().toString(),
+      title: taskInput,
+      status: selectedStatus, // 선택한 보드에 추가
+    };
+
+    const updatedPosts = [...posts, newPost];
+    savePostsToLocalStorage(updatedPosts);
+    setTaskInput("");
+    setIsModalOpen(false);
+  };
+
+  const updateTask = () => {
+    if (!taskInput.trim() || !editingId) return;
+
+    const updatedPosts = posts.map((post) =>
+      post.id === editingId ? { ...post, title: taskInput } : post
+    );
+
+    savePostsToLocalStorage(updatedPosts);
+    setTaskInput("");
+    setEditingId(null);
+    setIsModalOpen(false);
+  };
+
+  const deleteTask = (id: string) => {
+    const updatedPosts = posts.filter((post) => post.id !== id);
+    savePostsToLocalStorage(updatedPosts);
   };
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
-      <div className="flex gap-4 p-4">
-        {statuses.map((status) => (
-          <Droppable key={status} droppableId={status}>
-            {(provided) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                className="w-64 bg-gray-100 p-4 rounded-lg shadow-md min-h-[200px]"
-              >
-                <h2 className="text-lg font-bold mb-2">{status}</h2>
-                {posts
-                  .filter((post) => post.status === status)
-                  .map((post, index) => (
-                    <Draggable
-                      key={post.id}
-                      draggableId={post.id}
-                      index={index}
-                    >
-                      {(provided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          className="bg-white p-2 rounded-md shadow mb-2 cursor-grab"
-                        >
-                          {post.title}
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                {provided.placeholder}
+    <div className="p-4 h-screen flex flex-col">
+      {/* ✅ 전체 타이틀 */}
+      <h1 className="text-black font-bold mb-4 text-lg">TODO BOARD</h1>
+
+      <DragDropContext onDragEnd={onDragEnd}>
+        {/* ✅ 헤더 높이 제외한 나머지를 차지하도록 설정 */}
+        <div className="flex gap-4" style={{ height: "calc(100vh - 64px)" }}>
+          {statuses.map((status) => (
+            <div
+              key={status}
+              className="flex flex-col w-full bg-gray-100 p-4 rounded-lg shadow-md h-full"
+            >
+              {/* ✅ 타이틀 + 추가 버튼 */}
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="text-lg font-bold">{status}</h2>
+                <button
+                  className="text-xl font-bold text-blue-500"
+                  onClick={() => {
+                    setSelectedStatus(status);
+                    setIsModalOpen(true);
+                    setEditingId(null);
+                    setTaskInput("");
+                  }}
+                >
+                  +
+                </button>
               </div>
-            )}
-          </Droppable>
-        ))}
-      </div>
-    </DragDropContext>
+
+              {/* ✅ Droppable 적용 (높이 조정, 내용이 많아지면 스크롤) */}
+              <Droppable droppableId={String(status)}>
+                {(provided, snapshot) => (
+                  <ul
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={`flex flex-col gap-2 p-2 transition-all flex-grow overflow-auto 
+                ${snapshot.isDraggingOver ? "bg-gray-50" : ""}`}
+                  >
+                    {posts
+                      .filter((post) => post.status === status)
+                      .map((post, index) => (
+                        <Draggable
+                          key={post.id}
+                          draggableId={post.id}
+                          index={index}
+                        >
+                          {(provided) => (
+                            <li
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              className="bg-white p-2 rounded-md shadow cursor-grab flex justify-between items-center"
+                            >
+                              <span
+                                className="flex-1 cursor-pointer"
+                                onClick={() => {
+                                  setEditingId(post.id);
+                                  setTaskInput(post.title);
+                                  setIsModalOpen(true);
+                                }}
+                              >
+                                {post.title}
+                              </span>
+                              <button onClick={() => deleteTask(post.id)}>
+                                <Trash2 size={16} className="text-red-500" />
+                              </button>
+                            </li>
+                          )}
+                        </Draggable>
+                      ))}
+                    {provided.placeholder}
+                  </ul>
+                )}
+              </Droppable>
+            </div>
+          ))}
+        </div>
+      </DragDropContext>
+
+      {/* ✅ 모달 */}
+      {isModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white p-6 rounded-lg shadow-md w-80">
+            <h2 className="text-lg font-bold mb-2">
+              {editingId ? "할 일 수정" : `${selectedStatus}에 할 일 추가`}
+            </h2>
+            <input
+              type="text"
+              placeholder="할 일을 입력하세요"
+              value={taskInput}
+              onChange={(e) => setTaskInput(e.target.value)}
+              className="w-full border p-2 rounded mb-2"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-3 py-1 bg-gray-300 rounded"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setEditingId(null);
+                  setTaskInput("");
+                }}
+              >
+                취소
+              </button>
+              <button
+                className="px-3 py-1 bg-blue-500 text-white rounded"
+                onClick={editingId ? updateTask : addTask}
+              >
+                {editingId ? "수정" : "추가"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
