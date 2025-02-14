@@ -1,309 +1,107 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
-import { useDrag, useDrop } from "react-dnd";
-import { nanoid } from "nanoid";
-import { Ellipsis } from "lucide-react";
 
-type BoardType = "대기" | "진행" | "보류" | "완료";
+import { useState } from "react";
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  DropResult,
+} from "@hello-pangea/dnd";
 
-interface TaskType {
+// ✅ 상태 타입 정의
+type Status = "대기" | "진행" | "보류" | "완료";
+
+type Post = {
   id: string;
-  content: string;
-  board: BoardType;
-}
+  title: string;
+  status: Status;
+};
 
-const BOARDS: BoardType[] = ["대기", "진행", "보류", "완료"];
+// ✅ 더미 데이터 (초기 상태)
+const initialPosts: Post[] = [
+  { id: "1", title: "할 일 1", status: "대기" },
+  { id: "2", title: "할 일 2", status: "진행" },
+  { id: "3", title: "할 일 3", status: "보류" },
+  { id: "4", title: "할 일 4", status: "완료" },
+];
 
-export default function Kanban() {
-  const [tasks, setTasks] = useState<TaskType[]>(() => {
-    const savedTasks = localStorage.getItem("tasks");
-    return savedTasks ? (JSON.parse(savedTasks) as TaskType[]) : [];
-  });
+// ✅ 상태 리스트
+const statuses: Status[] = ["대기", "진행", "보류", "완료"];
 
-  useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-  }, [tasks]);
+export const MainPage = () => {
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
 
-  const addTask = (content: string, board: BoardType) => {
-    if (!content.trim()) return;
-    const newTask = { id: nanoid(), content, board };
-    setTasks((prev) => [...prev, newTask]);
-  };
+  // ✅ 드래그 종료 시 실행될 함수
+  const onDragEnd = (result: DropResult) => {
+    const { destination } = result;
+    if (!destination) return;
 
-  const moveTask = (
-    taskId: string,
-    toBoard: BoardType,
-    targetIndex?: number
-  ) => {
-    setTasks((prev) => {
-      const updatedTasks = [...prev];
-      const taskIndex = updatedTasks.findIndex((task) => task.id === taskId);
-      if (taskIndex === -1) return prev;
+    setPosts((prevPosts) => {
+      const updatedPosts = [...prevPosts];
 
-      const task = { ...updatedTasks[taskIndex], board: toBoard };
-      updatedTasks.splice(taskIndex, 1);
-      if (targetIndex !== undefined) {
-        updatedTasks.splice(targetIndex, 0, task);
-      } else {
-        updatedTasks.push(task);
-      }
+      // 드래그한 아이템 찾기
+      const movedPostIndex = updatedPosts.findIndex(
+        (p) => p.id === result.draggableId
+      );
+      if (movedPostIndex === -1) return prevPosts;
 
-      return updatedTasks;
+      const [movedPost] = updatedPosts.splice(movedPostIndex, 1); // 기존 위치에서 제거
+      movedPost.status = destination.droppableId as Status; // 새로운 상태 업데이트
+
+      // 새로운 위치 삽입을 위해 해당 보드의 모든 아이템 필터링
+      const targetBoardItems = updatedPosts.filter(
+        (p) => p.status === movedPost.status
+      );
+      targetBoardItems.splice(destination.index, 0, movedPost); // 새 위치에 삽입
+
+      // 최종적으로 상태별 정렬을 다시 수행
+      const reorderedPosts = [
+        ...updatedPosts.filter((p) => p.status !== movedPost.status), // 다른 보드의 아이템 유지
+        ...targetBoardItems, // 새로운 상태로 변경된 아이템들 삽입
+      ];
+
+      return reorderedPosts;
     });
   };
 
-  const deleteTask = (taskId: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== taskId));
-  };
-
   return (
-    <div className="p-4 flex flex-col min-h-screen">
-      <h1 className="font-bold text-black text-lg">TODO BOARD</h1>
-      <div className="flex gap-4 w-full mt-4">
-        {BOARDS.map((board) => (
-          <Board
-            key={board}
-            title={board}
-            tasks={tasks.filter((t) => t.board === board)}
-            moveTask={moveTask}
-            deleteTask={deleteTask}
-            setTasks={setTasks}
-            addTask={addTask}
-          />
+    <DragDropContext onDragEnd={onDragEnd}>
+      <div className="flex gap-4 p-4">
+        {statuses.map((status) => (
+          <Droppable key={status} droppableId={status}>
+            {(provided) => (
+              <div
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+                className="w-64 bg-gray-100 p-4 rounded-lg shadow-md min-h-[200px]"
+              >
+                <h2 className="text-lg font-bold mb-2">{status}</h2>
+                {posts
+                  .filter((post) => post.status === status)
+                  .map((post, index) => (
+                    <Draggable
+                      key={post.id}
+                      draggableId={post.id}
+                      index={index}
+                    >
+                      {(provided) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className="bg-white p-2 rounded-md shadow mb-2 cursor-grab"
+                        >
+                          {post.title}
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
         ))}
       </div>
-    </div>
-  );
-}
-
-const Board = ({
-  title,
-  tasks,
-  moveTask,
-  deleteTask,
-  setTasks,
-  addTask,
-}: {
-  title: BoardType;
-  tasks: TaskType[];
-  moveTask: (taskId: string, toBoard: BoardType, targetIndex?: number) => void;
-  deleteTask: (taskId: string) => void;
-  setTasks: React.Dispatch<React.SetStateAction<TaskType[]>>;
-  addTask: (content: string, board: BoardType) => void;
-}) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newTaskContent, setNewTaskContent] = useState("");
-  const [{ isOver }, drop] = useDrop({
-    accept: "TASK",
-    drop: (item: { id: string }) => moveTask(item.id, title),
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-    }),
-  });
-
-  const [, drag] = useDrag({
-    type: "TASK",
-    item: { id: title },
-    collect: (monitor) => ({
-      isDragging: !!monitor.isDragging(),
-    }),
-  });
-
-  const combinedRef = useRef<HTMLDivElement>(null);
-
-  drag(drop(combinedRef));
-
-  // 엔터 키로 할 일 추가
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      addTask(newTaskContent, title);
-      setNewTaskContent("");
-      setIsModalOpen(false);
-    }
-  };
-
-  // 배경 클릭 시 팝업 닫기
-  const handleBackgroundClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // 이벤트 전파 방지
-    setIsModalOpen(false);
-  };
-
-  return (
-    <div
-      ref={combinedRef}
-      className={`w-1/4 bg-gray-200 p-4 rounded shadow min-h-[300px] ${
-        isOver ? "bg-blue-100" : ""
-      }`}
-    >
-      <div className="flex justify-between items-center">
-        <h2 className="mb-2 text-slate-600">{title}</h2>
-        <button
-          onClick={() => setIsModalOpen(true)} // + 눌러 팝업창 띄우기
-          className="bg-blue-600 text-white p-2 rounded-full w-6 h-6 flex justify-center items-center"
-        >
-          +
-        </button>
-      </div>
-      {tasks.map((task, index) => (
-        <Task
-          key={task.id}
-          task={task}
-          moveTask={moveTask}
-          deleteTask={deleteTask}
-          setTasks={setTasks}
-          index={index}
-        />
-      ))}
-      {/* Task 추가 팝업 */}
-      {isModalOpen && (
-        <div
-          onClick={handleBackgroundClick} // 배경 클릭 시 팝업 닫기
-          className="fixed inset-0 bg-gray-500 bg-opacity-50 flex justify-center items-center"
-        >
-          <div
-            className="bg-white p-4 rounded shadow-lg w-72"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <input
-              type="text"
-              value={newTaskContent}
-              onChange={(e) => setNewTaskContent(e.target.value)}
-              onKeyDown={handleKeyDown} // 엔터 키 처리
-              className="border p-2 w-full rounded text-slate-600"
-              placeholder="할 일 입력"
-            />
-            <div className="flex gap-2 mt-4 justify-center">
-              <button
-                onClick={() => {
-                  addTask(newTaskContent, title); // 해당 보드에 할 일 추가
-                  setNewTaskContent("");
-                  setIsModalOpen(false);
-                }}
-                className="bg-blue-500 text-white p-2 rounded"
-              >
-                추가
-              </button>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="bg-gray-300 p-2 rounded"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const Task = ({
-  task,
-  moveTask,
-  index,
-  deleteTask,
-  setTasks,
-}: {
-  task: TaskType;
-  moveTask: (taskId: string, toBoard: BoardType, targetIndex?: number) => void;
-  index: number;
-  deleteTask: (taskId: string) => void;
-  setTasks: React.Dispatch<React.SetStateAction<TaskType[]>>;
-}) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newContent, setNewContent] = useState(task.content); // 수정할 내용
-  const ref = useRef<HTMLDivElement>(null);
-
-  const [{ isDragging }, drag] = useDrag({
-    type: "TASK",
-    item: { id: task.id },
-    collect: (monitor) => ({
-      isDragging: !!monitor.isDragging(),
-    }),
-  });
-
-  const [, drop] = useDrop({
-    accept: "TASK",
-    hover: (draggedItem: { id: string }) => {
-      if (draggedItem.id !== task.id) {
-        moveTask(draggedItem.id, task.board, index);
-      }
-    },
-  });
-
-  drag(drop(ref));
-
-  // 배경 클릭 시 팝업 닫기
-  const handleBackgroundClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // 이벤트 전파 방지
-    setIsModalOpen(false);
-  };
-
-  return (
-    <div>
-      <div
-        ref={ref}
-        className={`p-2 border rounded bg-white mt-2 text-slate-700 flex justify-between items-center ${
-          isDragging ? "opacity-50" : ""
-        }`}
-      >
-        <p>{task.content}</p>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="border border-slate-300 rounded-md w-7 h-5 flex justify-center items-center"
-        >
-          <Ellipsis className="w-4" />
-        </button>
-      </div>
-
-      {/* 팝업창 */}
-      {isModalOpen && (
-        <div
-          onClick={handleBackgroundClick}
-          className="fixed inset-0 bg-gray-500 bg-opacity-50 flex justify-center items-center"
-        >
-          <div
-            className="bg-white p-4 rounded shadow-lg w-72"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <input
-              type="text"
-              value={newContent}
-              onChange={(e) => setNewContent(e.target.value)}
-              className="border p-2 w-full rounded text-slate-600"
-            />
-            <div className="flex gap-2 mt-4 justify-center">
-              <button
-                onClick={() => {
-                  const updatedTask = { ...task, content: newContent };
-                  setTasks((prev) =>
-                    prev.map((t) => (t.id === task.id ? updatedTask : t))
-                  );
-                  setIsModalOpen(false);
-                }}
-                className="bg-blue-500 text-white p-2 rounded"
-              >
-                수정
-              </button>
-              <button
-                onClick={() => {
-                  deleteTask(task.id);
-                  setIsModalOpen(false);
-                }}
-                className="bg-red-500 text-white p-2 rounded"
-              >
-                삭제
-              </button>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="bg-gray-300 p-2 rounded"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </DragDropContext>
   );
 };
