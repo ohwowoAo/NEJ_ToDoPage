@@ -112,7 +112,7 @@ export const MainPage = () => {
       <h1 className="text-black font-bold mb-4 text-lg">TODO BOARD</h1>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-4" style={{ height: "calc(100vh - 64px)" }}>
+        <div className="flex gap-4 text-slate-600 h-[calc(100vh-64px)]">
           {statuses.map((status) => (
             <div
               key={status}
@@ -138,7 +138,7 @@ export const MainPage = () => {
                   <ul
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`flex flex-col gap-2 p-2 transition-all flex-grow overflow-auto 
+                    className={`flex flex-col gap-2 p-2 transition-all flex-grow overflow-auto  
                   ${snapshot.isDraggingOver ? "bg-gray-50" : ""}`}
                   >
                     {posts
@@ -157,7 +157,7 @@ export const MainPage = () => {
                               className="bg-white p-2 rounded-md shadow cursor-grab flex justify-between items-center"
                             >
                               <span
-                                className="flex-1 cursor-pointer"
+                                className="flex-1 cursor-pointer "
                                 onClick={() => {
                                   setEditingId(post.id);
                                   setTaskInput(post.title);
@@ -182,7 +182,7 @@ export const MainPage = () => {
         </div>
       </DragDropContext>
 
-      {/* ✅ 분리된 모달 적용 */}
+      {/* 모달 */}
       <TaskModal
         isOpen={isModalOpen}
         taskInput={taskInput}
