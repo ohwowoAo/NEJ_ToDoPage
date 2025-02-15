@@ -2,15 +2,15 @@
 
 ## 기술스택
 
-### 1. Local Storage에 데이터 저장
+#### 1. Local Storage에 데이터 저장
 
-### 2. Next.js v14.2.15
+#### 2. Next.js v14.2.15
 
-### 3. Tailwind CSS v3.4.17
+#### 3. Tailwind CSS v3.4.17
 
-### 4. TypeScript 사용
+#### 4. TypeScript 사용
 
-### 5. hello-pangea dnd 라이브러리 사용
+#### 5. hello-pangea dnd 라이브러리 사용
 
 ## 기능
 
